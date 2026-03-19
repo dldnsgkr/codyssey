@@ -1,0 +1,9 @@
+# 가상환경 폴더
+# venv, .venv 등과 같은 가상환경 폴더는 Git에 포함되지 않도록 무시합니다.
+venv/
+.venv/
+pyproject.toml
+requirements.txt
+.vscode
+log_analysis.md
+anomalies.log
