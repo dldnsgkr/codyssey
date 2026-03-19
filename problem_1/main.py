@@ -204,6 +204,7 @@ def generate_markdown_report(
 
 # 프로그램 전체 흐름 제어
 def main():
+    print('Hello Mars')
     file_path = "./problem_1/mission_computer_main.log"
 
     try:
