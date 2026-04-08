@@ -7,3 +7,5 @@ requirements.txt
 .vscode
 log_analysis.md
 anomalies.log
+__pycache__/
+*.pyc
