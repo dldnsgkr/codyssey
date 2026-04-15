@@ -1,0 +1,11 @@
+# 출력할 시스템 정보 항목 설정 (주석은 # 으로 시작)
+# get_mission_computer_info() 출력 항목
+os
+os_version
+cpu_type
+cpu_cores
+memory_total
+
+# get_mission_computer_load() 출력 항목
+cpu_usage
+memory_usage
