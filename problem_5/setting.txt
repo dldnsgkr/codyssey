@@ -1,11 +1,16 @@
-# 출력할 시스템 정보 항목 설정 (주석은 # 으로 시작)
-# get_mission_computer_info() 출력 항목
+# ============================================================
+# setting.txt - 미션 컴퓨터 출력 항목 설정 파일
+# ============================================================
+# 출력하고 싶은 항목은 주석(#)을 제거하고,
+# 출력하지 않으려면 줄 앞에 #을 붙이거나 줄을 삭제한다.
+#
+# [시스템 정보 항목] get_mission_computer_info()
 os
 os_version
 cpu_type
 cpu_cores
 memory_total
-
-# get_mission_computer_load() 출력 항목
+#
+# [시스템 부하 항목] get_mission_computer_load()
 cpu_usage
 memory_usage
