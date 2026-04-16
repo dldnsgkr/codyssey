@@ -131,7 +131,10 @@ class MissionComputer:
 
         # CPU 물리 코어 수 수집 (논리 코어 제외)
         try:
-            all_info['cpu_cores'] = psutil.cpu_count(logical=False)
+            physical = psutil.cpu_count(logical=False)
+            logical = psutil.cpu_count(logical=True)
+
+            all_info['cpu_cores'] = f'{physical} cores / {logical} threads'
         except Exception as e:
             all_info['cpu_cores'] = f'Error: {e}'
 
