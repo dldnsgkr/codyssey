@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
 import importlib
 import sys
@@ -14,6 +15,8 @@ CHANNELS = 1
 SAMPLE_WIDTH = 2
 RECORDS_DIR = Path(__file__).resolve().parent / 'records'
 TIMESTAMP_FORMAT = '%Y%m%d-%H%M%S'
+CSV_HEADER = ['time', 'text']
+DEFAULT_STT_MODEL = 'base'
 
 
 @dataclass(frozen = True)
@@ -25,6 +28,10 @@ class MicrophoneDevice:
 
 
 class RecorderError(Exception):
+    pass
+
+
+class SttError(Exception):
     pass
 
 
@@ -282,6 +289,74 @@ def print_recordings(files: list[Path]) -> None:
         )
 
 
+def load_stt_backend():
+    try:
+        return importlib.import_module('whisper')
+    except ModuleNotFoundError as error:
+        raise SttError(
+            'STT 기능을 사용하려면 openai-whisper 패키지를 설치해야 합니다.\n'
+            'pip install openai-whisper'
+        ) from error
+
+
+def transcribe_audio(
+    file_path: Path,
+    model_name: str = DEFAULT_STT_MODEL,
+) -> list[tuple[float, str]]:
+    whisper = load_stt_backend()
+    model = whisper.load_model(model_name)
+    result = model.transcribe(str(file_path), task = 'transcribe')
+    return [
+        (segment['start'], segment['text'].strip())
+        for segment in result.get('segments', [])
+    ]
+
+
+def save_transcription_csv(
+    audio_path: Path,
+    segments: list[tuple[float, str]],
+) -> Path:
+    csv_path = audio_path.with_suffix('.csv')
+    with open(csv_path, 'w', newline = '', encoding = 'utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(CSV_HEADER)
+        for time_val, text in segments:
+            writer.writerow([f'{time_val:.3f}', text])
+    return csv_path
+
+
+def search_transcriptions(
+    keyword: str,
+    search_dir: Path = RECORDS_DIR,
+) -> list[tuple[str, str, str]]:
+    results = []
+    if not search_dir.exists():
+        return results
+    for csv_path in sorted(search_dir.glob('*.csv')):
+        try:
+            with open(csv_path, 'r', encoding = 'utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    text = row.get('text', '')
+                    if keyword.lower() in text.lower():
+                        results.append((
+                            csv_path.name,
+                            row.get('time', ''),
+                            text,
+                        ))
+        except OSError:
+            continue
+    return results
+
+
+def print_search_results(results: list[tuple[str, str, str]], keyword: str) -> None:
+    if not results:
+        print(f"'{keyword}'에 해당하는 내용을 찾을 수 없습니다.")
+        return
+    for filename, time_val, text in results:
+        print(f'[{filename}] {time_val}s: {text}')
+
+
 def validate_seconds(value: str) -> int:
     try:
         seconds = int(value)
@@ -341,6 +416,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     list_parser.set_defaults(handler = handle_list)
 
+    stt_parser = subparsers.add_parser(
+        'stt',
+        help = '녹음된 음성 파일을 텍스트로 변환하고 CSV로 저장합니다.',
+    )
+    stt_parser.add_argument(
+        '--file',
+        type = str,
+        default = None,
+        help = '변환할 특정 WAV 파일 경로 (미지정시 records 폴더 전체 처리)',
+    )
+    stt_parser.add_argument(
+        '--model',
+        type = str,
+        default = DEFAULT_STT_MODEL,
+        help = 'Whisper 모델 크기 (tiny/base/small/medium/large, 기본: base)',
+    )
+    stt_parser.set_defaults(handler = handle_stt)
+
+    search_parser = subparsers.add_parser(
+        'search',
+        help = '저장된 CSV 파일에서 키워드를 검색합니다.',
+    )
+    search_parser.add_argument(
+        'keyword',
+        type = str,
+        help = '검색할 키워드',
+    )
+    search_parser.set_defaults(handler = handle_search)
+
     return parser
 
 
@@ -374,6 +478,30 @@ def handle_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_stt(args: argparse.Namespace) -> int:
+    if args.file:
+        files = [Path(args.file)]
+    else:
+        files = list_recording_files()
+
+    if not files:
+        print('처리할 녹음 파일이 없습니다.')
+        return 0
+
+    for file_path in files:
+        print(f'처리 중: {file_path.name}')
+        segments = transcribe_audio(file_path, args.model)
+        csv_path = save_transcription_csv(file_path, segments)
+        print(f'저장 완료: {csv_path.name} ({len(segments)}개 세그먼트)')
+    return 0
+
+
+def handle_search(args: argparse.Namespace) -> int:
+    results = search_transcriptions(args.keyword)
+    print_search_results(results, args.keyword)
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -381,6 +509,9 @@ def main() -> int:
     try:
         return args.handler(args)
     except RecorderError as error:
+        print(error, file = sys.stderr)
+        return 1
+    except SttError as error:
         print(error, file = sys.stderr)
         return 1
     except KeyboardInterrupt:
